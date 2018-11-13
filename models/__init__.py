@@ -85,16 +85,25 @@ def postprocess_logits(inputs, temperature=1.):
     def delistify(x):
         return x if len(x) > 1 else x[0]
 
-    softmax = [tf.nn.softmax(e_logits / temperature)
-               for e_logits in listify(inputs)]
-    argmax = [tf.one_hot(tf.argmax(e_logits, axis=-1), depth=e_logits.shape[-1], dtype=e_logits.dtype)
-              for e_logits in listify(inputs)]
-    gumbel_logits = [e_logits - tf.log(- tf.log(tf.random_uniform(tf.shape(e_logits), dtype=e_logits.dtype)))
-                     for e_logits in listify(inputs)]
-    gumbel_softmax = [tf.nn.softmax(e_gumbel_logits / temperature)
-                      for e_gumbel_logits in gumbel_logits]
-    gumbel_argmax = [
-        tf.one_hot(tf.argmax(e_gumbel_logits, axis=-1), depth=e_gumbel_logits.shape[-1], dtype=e_gumbel_logits.dtype)
-        for e_gumbel_logits in gumbel_logits]
+    softmax = []
+    argmax = []
+    gumbel_logits = []
+    gumbel_softmax = []
+    gumbel_argmax = []
+
+    for i, e_logits in enumerate(listify(inputs)):
+        with tf.name_scope('gumbel_softmax_{}'.format(i), values=[e_logits]):
+            e_softmax = tf.nn.softmax(e_logits / temperature)
+            e_argmax = tf.one_hot(tf.argmax(e_logits, axis=-1), depth=e_logits.shape[-1], dtype=e_logits.dtype)
+            e_gumbel_logits = e_logits - tf.log(- tf.log(tf.random_uniform(tf.shape(e_logits), dtype=e_logits.dtype)))
+            e_gumbel_softmax = tf.nn.softmax(e_gumbel_logits / temperature)
+            e_gumbel_argmax = tf.one_hot(tf.argmax(e_gumbel_logits, axis=-1), depth=e_gumbel_logits.shape[-1],
+                           dtype=e_gumbel_logits.dtype)
+
+        softmax.append(e_softmax)
+        argmax.append(e_argmax)
+        gumbel_logits.append(e_gumbel_logits)
+        gumbel_softmax.append(e_gumbel_softmax)
+        gumbel_argmax.append(e_gumbel_argmax)
 
     return [delistify(e) for e in (softmax, argmax, gumbel_logits, gumbel_softmax, gumbel_argmax)]

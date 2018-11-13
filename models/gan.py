@@ -14,20 +14,20 @@ class GraphGANModel(object):
         self.decoder, self.discriminator, self.batch_discriminator = vertexes, edges, nodes, embedding_dim, decoder_units, \
                                                                      discriminator_units, decoder, discriminator, batch_discriminator
 
-        self.training = tf.placeholder_with_default(False, shape=())
-        self.dropout_rate = tf.placeholder_with_default(0., shape=())
-        self.soft_gumbel_softmax = tf.placeholder_with_default(soft_gumbel_softmax, shape=())
-        self.hard_gumbel_softmax = tf.placeholder_with_default(hard_gumbel_softmax, shape=())
+        self.training = tf.placeholder_with_default(False, shape=(), name="is_training")
+        self.dropout_rate = tf.placeholder_with_default(0., shape=(), name="dropout_rate")
+        self.soft_gumbel_softmax = tf.placeholder_with_default(soft_gumbel_softmax, shape=(), name="soft_gumbel_softmax")
+        self.hard_gumbel_softmax = tf.placeholder_with_default(hard_gumbel_softmax, shape=(), name="hard_gumbel_softmax")
         self.temperature = tf.placeholder_with_default(1., shape=())
 
-        self.edges_labels = tf.placeholder(dtype=tf.int64, shape=(None, vertexes, vertexes))
-        self.nodes_labels = tf.placeholder(dtype=tf.int64, shape=(None, vertexes))
-        self.embeddings = tf.placeholder(dtype=tf.float32, shape=(None, embedding_dim))
+        self.edges_labels = tf.placeholder(dtype=tf.int64, shape=(None, vertexes, vertexes), name="edges_labels")
+        self.nodes_labels = tf.placeholder(dtype=tf.int64, shape=(None, vertexes), name="nodes_labels")
+        self.embeddings = tf.placeholder(dtype=tf.float32, shape=(None, embedding_dim), name="embeddings")
 
-        self.rewardR = tf.placeholder(dtype=tf.float32, shape=(None, 1))
-        self.rewardF = tf.placeholder(dtype=tf.float32, shape=(None, 1))
-        self.adjacency_tensor = tf.one_hot(self.edges_labels, depth=edges, dtype=tf.float32)
-        self.node_tensor = tf.one_hot(self.nodes_labels, depth=nodes, dtype=tf.float32)
+        self.rewardR = tf.placeholder(dtype=tf.float32, shape=(None, 1), name="rewardR")
+        self.rewardF = tf.placeholder(dtype=tf.float32, shape=(None, 1), name="rewardF")
+        self.adjacency_tensor = tf.one_hot(self.edges_labels, depth=edges, dtype=tf.float32, name="adj_one_hot")
+        self.node_tensor = tf.one_hot(self.nodes_labels, depth=nodes, dtype=tf.float32, name="node_one_hot")
 
         with tf.variable_scope('generator'):
             self.edges_logits, self.nodes_logits = self.decoder(self.embeddings, decoder_units, vertexes, edges, nodes,
