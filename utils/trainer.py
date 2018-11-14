@@ -44,9 +44,10 @@ class Trainer:
 
     def load(self):
         directory = self._directory
-        self._saver.restore(self.session, '{}/{}.ckpt'.format(directory, 'model'))
+        ckpt_filename = tf.train.latest_checkpoint(directory)
+        self._saver.restore(self.session, ckpt_filename)
         self.print = pickle.load(open('{}/{}.pkl'.format(directory, 'trainer'), 'rb'))
-        self.log('Model loaded from {}!'.format(directory))
+        self.log('Model loaded from {}!'.format(ckpt_filename))
 
     def train(self, session, batch_dim, epochs, steps,
               train_fetch_dict, train_feed_dict,
