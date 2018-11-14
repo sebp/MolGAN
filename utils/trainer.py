@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 from datetime import datetime
 from datetime import timedelta
-from utils.progress_bar import ProgressBar
+from tqdm import tqdm
 from collections import defaultdict
 import pprint
 
@@ -69,15 +69,14 @@ class Trainer:
                                                                                eta))
 
                 if eval_batch is not None:
-                    pr = ProgressBar(80, eval_batch)
+                    pr = tqdm(range(eval_batch))
                     output = defaultdict(list)
 
-                    for i in range(eval_batch):
+                    for i in pr:
                         for k, v in self.session.run(eval_fetch_dict(epoch, epochs, min_epochs, model, optimizer),
                                                      feed_dict=eval_feed_dict(epoch, epochs, min_epochs, model,
                                                                               optimizer, batch_dim)).items():
                             output[k].append(v)
-                        pr.update(i + 1)
 
                     self.log(date=False)
                     output = {k: np.mean(v) for k, v in output.items()}
@@ -104,14 +103,13 @@ class Trainer:
                 self.log('End of training ({} epochs) in {}'.format(epochs, from_start))
 
                 if test_batch is not None:
-                    pr = ProgressBar(80, test_batch)
+                    pr = tqdm(range(test_batch))
                     output = defaultdict(list)
 
-                    for i in range(test_batch):
+                    for i in pr:
                         for k, v in self.session.run(test_fetch_dict(model, optimizer),
                                                      feed_dict=test_feed_dict(model, optimizer, batch_dim)).items():
                             output[k].append(v)
-                        pr.update(i + 1)
 
                     self.log(date=False)
                     output = {k: np.mean(v) for k, v in output.items()}
@@ -158,11 +156,10 @@ class Trainer:
 
             if epoch < epochs:
                 last_epoch_start_time = time.time()
-                pr = ProgressBar(80, steps)
-                for step in range(steps):
+                pr = tqdm(range(steps))
+                for step in pr:
                     _train_step(steps * epoch + step, steps, epoch, epochs, min_epochs, self.model, self.optimizer,
                                 batch_dim)
-                    pr.update(step + 1)
 
                 self.log(date=False)
 
