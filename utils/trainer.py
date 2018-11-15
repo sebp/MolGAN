@@ -9,6 +9,10 @@ from tqdm import tqdm
 from collections import defaultdict
 import pprint
 
+import logging
+
+LOG = logging.getLogger("molgan")
+
 
 class Trainer:
 
@@ -27,7 +31,8 @@ class Trainer:
 
     @staticmethod
     def log(msg='', date=True):
-        print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S')) + ' ' + str(msg) if date else str(msg))
+        #print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S')) + ' ' + str(msg) if date else str(msg))
+        LOG.info(msg)
 
     def save(self):
         directory = self._directory
@@ -40,7 +45,7 @@ class Trainer:
 
         self._saver.save(self.session, '{}/{}.ckpt'.format(directory, 'model'), global_step=self._global_step)
         pickle.dump(self.print, open('{}/{}.pkl'.format(directory, 'trainer'), 'wb'))
-        self.log('Model saved in {}!'.format(directory))
+        self.log('Model for global_step={} saved in {}!'.format(self._global_step, directory))
 
     def load(self):
         directory = self._directory

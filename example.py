@@ -1,4 +1,5 @@
 import numpy as np
+import logging
 import tensorflow as tf
 
 from utils.sparse_molecular_dataset import SparseMolecularDataset
@@ -24,6 +25,13 @@ data = SparseMolecularDataset()
 data.load('data/gdb9_9nodes.sparsedataset')
 
 steps = (len(data) // batch_dim)
+
+logger = logging.getLogger('molgan')
+fh = logging.FileHandler('molgan.log')
+fh.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
+fh.setLevel(logging.DEBUG)
+logger.addHandler(fh)
+logger.setLevel(logging.DEBUG)
 
 
 def train_fetch_dict(i, steps, epoch, epochs, min_epochs, model, optimizer):
@@ -218,7 +226,7 @@ with tf.Session() as session:
                       save_every=save_every,
                       directory=checkpoint_dir)
 
-    print('Parameters: {}'.format(np.sum([np.prod(e.shape.as_list()) for e in tf.trainable_variables()])))
+    logger.info('Parameters: %r', np.sum([np.prod(e.shape.as_list()) for e in tf.trainable_variables()]))
 
     session.run(init_op)
     session.graph.finalize()
