@@ -18,29 +18,33 @@ def graph_convolution_layer(inputs, units, training, activation=None, dropout_ra
 
 
 def graph_aggregation_layer(inputs, units, training, activation=None, dropout_rate=0.):
-    i = tf.layers.dense(inputs, units=units, activation=tf.nn.sigmoid)
-    j = tf.layers.dense(inputs, units=units, activation=activation)
-    output = tf.reduce_sum(i * j, 1)
-    output = activation(output) if activation is not None else output
-    output = tf.layers.dropout(output, dropout_rate, training=training)
+    with tf.variable_scope('graph_aggregation', values=[inputs]):
+        i = tf.layers.dense(inputs, units=units, activation=tf.nn.sigmoid)
+        j = tf.layers.dense(inputs, units=units, activation=activation)
+        output = tf.reduce_sum(i * j, 1)
+        output = activation(output) if activation is not None else output
+        output = tf.layers.dropout(output, dropout_rate, training=training)
 
     return output
 
 
 def multi_dense_layers(inputs, units, training, activation=None, dropout_rate=0.):
     hidden_tensor = inputs
-    for u in units:
-        hidden_tensor = tf.layers.dense(hidden_tensor, units=u, activation=activation)
-        hidden_tensor = tf.layers.dropout(hidden_tensor, dropout_rate, training=training)
+    for i, u in enumerate(units):
+        with tf.variable_scope('dense_{}'.format(i), values=[inputs]):
+            hidden_tensor = tf.layers.dense(hidden_tensor, units=u, activation=activation)
+            hidden_tensor = tf.layers.dropout(hidden_tensor, dropout_rate, training=training)
 
     return hidden_tensor
 
 
 def multi_graph_convolution_layers(inputs, units, training, activation=None, dropout_rate=0.):
     adjacency_tensor, hidden_tensor, node_tensor = inputs
-    for u in units:
-        hidden_tensor = graph_convolution_layer(inputs=(adjacency_tensor, hidden_tensor, node_tensor),
-                                                units=u, activation=activation, dropout_rate=dropout_rate,
-                                                training=training)
+    for i, u in enumerate(units):
+        inputs = (adjacency_tensor, hidden_tensor, node_tensor)
+        with tf.variable_scope('graph_conv_{}'.format(i), values=inputs):
+            hidden_tensor = graph_convolution_layer(inputs=inputs,
+                                                    units=u, activation=activation, dropout_rate=dropout_rate,
+                                                    training=training)
 
     return hidden_tensor
