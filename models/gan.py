@@ -59,12 +59,13 @@ class GraphGANModel(object):
         with tf.name_scope('D_x_fake'):
             self.logits_fake, self.features_fake = self.D_x((self.edges_hat, None, self.nodes_hat),
                                                             units=discriminator_units)
-
+        """
         with tf.name_scope('V_x_real'):
             self.value_logits_real = self.V_x((self.adjacency_tensor, None, self.node_tensor),
                                               units=discriminator_units)
         with tf.name_scope('V_x_fake'):
             self.value_logits_fake = self.V_x((self.edges_hat, None, self.nodes_hat), units=discriminator_units)
+        """
 
     def D_x(self, inputs, units):
         with tf.variable_scope('discriminator', reuse=tf.AUTO_REUSE):

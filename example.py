@@ -61,7 +61,7 @@ logger.setLevel(logging.DEBUG)
 def train_fetch_dict(i, steps, epoch, epochs, min_epochs, model, optimizer):
     if i % PARAMS.n_critic == 0:
         train_step = [optimizer.train_step_G]
-        if PARAMS.la < 1:
+        if False:
             train_step.append(optimizer.train_step_V)
             summary_op = optimizer.summary_op_RL
         else:
@@ -82,7 +82,7 @@ def train_feed_dict(i, steps, epoch, epochs, min_epochs, model, optimizer, batch
     if PARAMS.la < 1:
 
         if i % PARAMS.n_critic == 0:
-            rewardR = reward(mols)
+            # rewardR = reward(mols)
 
             n, e = session.run([model.nodes_gumbel_argmax, model.edges_gumbel_argmax],
                                feed_dict={model.training: False, model.embeddings: embeddings})
@@ -90,15 +90,15 @@ def train_feed_dict(i, steps, epoch, epochs, min_epochs, model, optimizer, batch
             with disable_rdkit_log():
                 mols = [data.matrices2mol(n_, e_, strict=True) for n_, e_ in zip(n, e)]
 
-            rewardF = reward(mols)
-            logger.debug("step %d: average reward on real=%.4f, on generated=%.4f",
-                i, np.mean(rewardR), np.mean(rewardF))
+            # rewardF = reward(mols)
+            # logger.debug("step %d: average reward on real=%.4f, on generated=%.4f",
+            #     i, np.mean(rewardR), np.mean(rewardF))
 
             feed_dict = {model.edges_labels: a,
                          model.nodes_labels: x,
                          model.embeddings: embeddings,
-                         model.rewardR: rewardR,
-                         model.rewardF: rewardF,
+            #             model.rewardR: rewardR,
+            #             model.rewardF: rewardF,
                          model.training: True,
                          model.dropout_rate: PARAMS.dropout,
                          optimizer.la: PARAMS.la if epoch > 0 else 1.0}
@@ -123,7 +123,7 @@ def train_feed_dict(i, steps, epoch, epochs, min_epochs, model, optimizer, batch
 
 def eval_fetch_dict(i, epochs, min_epochs, model, optimizer):
     return {'loss D': optimizer.loss_D, 'loss G': optimizer.loss_G,
-            'loss RL': optimizer.loss_RL, 'loss V': optimizer.loss_V,
+            #'loss RL': optimizer.loss_RL, 'loss V': optimizer.loss_V,
             'la': optimizer.la}
 
 
@@ -132,7 +132,7 @@ def eval_feed_dict(i, epochs, min_epochs, model, optimizer, batch_dim):
     mols, _, _, a, x, _, _, _, _ = data.next_validation_batch()
     embeddings = model.sample_z(a.shape[0])
 
-    rewardR = reward(mols)
+    #rewardR = reward(mols)
 
     n, e = session.run([model.nodes_gumbel_argmax, model.edges_gumbel_argmax],
                        feed_dict={model.training: False, model.embeddings: embeddings})
@@ -140,20 +140,20 @@ def eval_feed_dict(i, epochs, min_epochs, model, optimizer, batch_dim):
     with disable_rdkit_log():
         mols = [data.matrices2mol(n_, e_, strict=True) for n_, e_ in zip(n, e)]
 
-    rewardF = reward(mols)
+    #rewardF = reward(mols)
 
     feed_dict = {model.edges_labels: a,
                  model.nodes_labels: x,
                  model.embeddings: embeddings,
-                 model.rewardR: rewardR,
-                 model.rewardF: rewardF,
+                 #model.rewardR: rewardR,
+                 #model.rewardF: rewardF,
                  model.training: False}
     return feed_dict
 
 
 def test_fetch_dict(model, optimizer):
     return {'loss D': optimizer.loss_D, 'loss G': optimizer.loss_G,
-            'loss RL': optimizer.loss_RL, 'loss V': optimizer.loss_V,
+            #'loss RL': optimizer.loss_RL, 'loss V': optimizer.loss_V,
             'la': optimizer.la}
 
 
@@ -162,7 +162,7 @@ def test_feed_dict(model, optimizer, batch_dim):
     mols, _, _, a, x, _, _, _, _ = data.next_test_batch()
     embeddings = model.sample_z(a.shape[0])
 
-    rewardR = reward(mols)
+    #rewardR = reward(mols)
 
     n, e = session.run([model.nodes_gumbel_argmax, model.edges_gumbel_argmax],
                        feed_dict={model.training: False, model.embeddings: embeddings})
@@ -170,13 +170,13 @@ def test_feed_dict(model, optimizer, batch_dim):
     with disable_rdkit_log():
         mols = [data.matrices2mol(n_, e_, strict=True) for n_, e_ in zip(n, e)]
 
-    rewardF = reward(mols)
+    #rewardF = reward(mols)
 
     feed_dict = {model.edges_labels: a,
                  model.nodes_labels: x,
                  model.embeddings: embeddings,
-                 model.rewardR: rewardR,
-                 model.rewardF: rewardF,
+                 #model.rewardR: rewardR,
+                 #model.rewardF: rewardF,
                  model.training: False}
     return feed_dict
 
