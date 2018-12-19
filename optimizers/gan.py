@@ -6,7 +6,9 @@ class GraphGANOptimizer(object):
     def __init__(self, model, learning_rate=1e-3, feature_matching=True):
         self.la = tf.placeholder_with_default(1., shape=())
 
-        with tf.name_scope('losses'):
+        with tf.name_scope('grad_penalty',
+                           values=[model.logits_real, model.adjacency_tensor, model.edges_softmax,
+                                   model.node_tensor, model.nodes_softmax, model.D_x, model.discriminator_units]):
             eps = tf.random_uniform(tf.shape(model.logits_real)[:1], dtype=model.logits_real.dtype)
 
             x_int0 = model.adjacency_tensor * tf.expand_dims(tf.expand_dims(tf.expand_dims(eps, -1), -1),
@@ -17,22 +19,34 @@ class GraphGANOptimizer(object):
 
             grad0, grad1 = tf.gradients(model.D_x((x_int0, None, x_int1), model.discriminator_units), (x_int0, x_int1))
 
-            with tf.name_scope('grad_penalty', values=[grad0, grad1]):
-                self.grad_penalty = tf.reduce_mean(((1 - tf.norm(grad0, axis=-1)) ** 2), (-2, -1)) + tf.reduce_mean(
-                    ((1 - tf.norm(grad1, axis=-1)) ** 2), -1, keepdims=True)
-                self.grad_penalty = tf.reduce_mean(self.grad_penalty)
+            self.grad_penalty = tf.reduce_mean(((1 - tf.norm(grad0, axis=-1)) ** 2), (-2, -1)) + tf.reduce_mean(
+                ((1 - tf.norm(grad1, axis=-1)) ** 2), -1, keepdims=True)
+            self.grad_penalty = tf.reduce_mean(self.grad_penalty)
 
+        with tf.name_scope('loss_D',
+                           values=[model.logits_real, model.logits_fake]):
             self.loss_D = - model.logits_real + model.logits_fake
+            self.loss_D = tf.reduce_mean(self.loss_D)
+
+        with tf.name_scope('loss_G',
+                           values=[model.logits_fake]):
             self.loss_G = - model.logits_fake
+            self.loss_G = tf.reduce_sum(self.loss_F) if feature_matching else tf.reduce_mean(self.loss_G)
+
+        with tf.name_scope('loss_V',
+                           values=[model.value_logits_real, model.rewardR, model.value_logits_fake, model.rewardF]):
             self.loss_V = (model.value_logits_real - model.rewardR) ** 2 + (
                     model.value_logits_fake - model.rewardF) ** 2
+            self.loss_V = tf.reduce_mean(self.loss_V)
+
+        with tf.name_scope('loss_RL',
+                           values=[model.value_logits_fake]):
             self.loss_RL = - model.value_logits_fake
+            self.loss_RL = tf.reduce_mean(self.loss_RL)
+
+        with tf.name_scope('loss_F', values=[model.features_real, model.features_fake]):
             self.loss_F = (tf.reduce_mean(model.features_real, 0) - tf.reduce_mean(model.features_fake, 0)) ** 2
 
-        self.loss_D = tf.reduce_mean(self.loss_D)
-        self.loss_G = tf.reduce_sum(self.loss_F) if feature_matching else tf.reduce_mean(self.loss_G)
-        self.loss_V = tf.reduce_mean(self.loss_V)
-        self.loss_RL = tf.reduce_mean(self.loss_RL)
         alpha = tf.abs(tf.stop_gradient(self.loss_G / self.loss_RL))
 
         with tf.name_scope('train_step'):
