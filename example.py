@@ -1,3 +1,4 @@
+from pathlib import Path
 import numpy as np
 import logging
 import tensorflow as tf
@@ -5,6 +6,7 @@ import tensorflow as tf
 from utils.sparse_molecular_dataset import SparseMolecularDataset
 from utils.trainer import Trainer
 from utils.utils import MolecularMetrics, samples, all_scores
+from utils.utils import disable_rdkit_log
 
 from models.gan import GraphGANModel
 from models import encoder_rgcn, decoder_adj, decoder_dot, decoder_rnn
@@ -20,6 +22,11 @@ n_samples = 5000
 z_dim = 8
 epochs = 10
 save_every = 1
+checkpoint_dir = Path('GraphGAN/lam{}'.format(la))
+
+if not checkpoint_dir.exists():
+    checkpoint_dir.mkdir(parents=True)
+checkpoint_dir = str(checkpoint_dir)
 
 data = SparseMolecularDataset()
 data.load('data/gdb9_9nodes.sparsedataset')
@@ -27,7 +34,7 @@ data.load('data/gdb9_9nodes.sparsedataset')
 steps = (len(data) // batch_dim)
 
 logger = logging.getLogger('molgan')
-fh = logging.FileHandler('molgan.log')
+fh = logging.FileHandler(checkpoint_dir + '/molgan.log')
 fh.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
 fh.setLevel(logging.DEBUG)
 logger.addHandler(fh)
@@ -63,7 +70,8 @@ def train_feed_dict(i, steps, epoch, epochs, min_epochs, model, optimizer, batch
             n, e = session.run([model.nodes_gumbel_argmax, model.edges_gumbel_argmax],
                                feed_dict={model.training: False, model.embeddings: embeddings})
             n, e = np.argmax(n, axis=-1), np.argmax(e, axis=-1)
-            mols = [data.matrices2mol(n_, e_, strict=True) for n_, e_ in zip(n, e)]
+            with disable_rdkit_log():
+                mols = [data.matrices2mol(n_, e_, strict=True) for n_, e_ in zip(n, e)]
 
             rewardF = reward(mols)
 
@@ -110,7 +118,8 @@ def eval_feed_dict(i, epochs, min_epochs, model, optimizer, batch_dim):
     n, e = session.run([model.nodes_gumbel_argmax, model.edges_gumbel_argmax],
                        feed_dict={model.training: False, model.embeddings: embeddings})
     n, e = np.argmax(n, axis=-1), np.argmax(e, axis=-1)
-    mols = [data.matrices2mol(n_, e_, strict=True) for n_, e_ in zip(n, e)]
+    with disable_rdkit_log():
+        mols = [data.matrices2mol(n_, e_, strict=True) for n_, e_ in zip(n, e)]
 
     rewardF = reward(mols)
 
@@ -139,7 +148,8 @@ def test_feed_dict(model, optimizer, batch_dim):
     n, e = session.run([model.nodes_gumbel_argmax, model.edges_gumbel_argmax],
                        feed_dict={model.training: False, model.embeddings: embeddings})
     n, e = np.argmax(n, axis=-1), np.argmax(e, axis=-1)
-    mols = [data.matrices2mol(n_, e_, strict=True) for n_, e_ in zip(n, e)]
+    with disable_rdkit_log():
+        mols = [data.matrices2mol(n_, e_, strict=True) for n_, e_ in zip(n, e)]
 
     rewardF = reward(mols)
 
@@ -154,28 +164,28 @@ def test_feed_dict(model, optimizer, batch_dim):
 
 def reward(mols):
     rr = 1.
-    for m in ('logp,sas,qed,unique' if metric == 'all' else metric).split(','):
-
-        if m == 'np':
-            rr *= MolecularMetrics.natural_product_scores(mols, norm=True)
-        elif m == 'logp':
-            rr *= MolecularMetrics.water_octanol_partition_coefficient_scores(mols, norm=True)
-        elif m == 'sas':
-            rr *= MolecularMetrics.synthetic_accessibility_score_scores(mols, norm=True)
-        elif m == 'qed':
-            rr *= MolecularMetrics.quantitative_estimation_druglikeness_scores(mols, norm=True)
-        elif m == 'novelty':
-            rr *= MolecularMetrics.novel_scores(mols, data)
-        elif m == 'dc':
-            rr *= MolecularMetrics.drugcandidate_scores(mols, data)
-        elif m == 'unique':
-            rr *= MolecularMetrics.unique_scores(mols)
-        elif m == 'diversity':
-            rr *= MolecularMetrics.diversity_scores(mols, data)
-        elif m == 'validity':
-            rr *= MolecularMetrics.valid_scores(mols)
-        else:
-            raise RuntimeError('{} is not defined as a metric'.format(m))
+    with disable_rdkit_log():
+        for m in ('logp,sas,qed,unique' if metric == 'all' else metric).split(','):
+            if m == 'np':
+                rr *= MolecularMetrics.natural_product_scores(mols, norm=True)
+            elif m == 'logp':
+                rr *= MolecularMetrics.water_octanol_partition_coefficient_scores(mols, norm=True)
+            elif m == 'sas':
+                rr *= MolecularMetrics.synthetic_accessibility_score_scores(mols, norm=True)
+            elif m == 'qed':
+                rr *= MolecularMetrics.quantitative_estimation_druglikeness_scores(mols, norm=True)
+            elif m == 'novelty':
+                rr *= MolecularMetrics.novel_scores(mols, data)
+            elif m == 'dc':
+                rr *= MolecularMetrics.drugcandidate_scores(mols, data)
+            elif m == 'unique':
+                rr *= MolecularMetrics.unique_scores(mols)
+            elif m == 'diversity':
+                rr *= MolecularMetrics.diversity_scores(mols, data)
+            elif m == 'validity':
+                rr *= MolecularMetrics.valid_scores(mols)
+            else:
+                raise RuntimeError('{} is not defined as a metric'.format(m))
 
     return rr.reshape(-1, 1)
 
@@ -217,8 +227,6 @@ optimizer = GraphGANOptimizer(model, learning_rate=1e-3, feature_matching=False)
 # session
 tf.train.create_global_step()
 init_op = tf.global_variables_initializer()
-
-checkpoint_dir = 'GraphGAN'
 
 with tf.Session() as session:
     # trainer

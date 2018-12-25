@@ -1,13 +1,24 @@
+from contextlib import contextmanager
 import numpy as np
 
 from sklearn.metrics import classification_report as sk_classification_report
 from sklearn.metrics import confusion_matrix
 
 from rdkit import Chem
+from rdkit import rdBase
 from rdkit.Chem import AllChem
 from rdkit.Chem import Draw
 
 from utils.molecular_metrics import MolecularMetrics
+
+
+@contextmanager
+def disable_rdkit_log():
+    rdBase.DisableLog('rdApp.error')
+    try:
+        yield
+    finally:
+        rdBase.EnableLog('rdApp.error')
 
 
 def mols2grid_image(mols, molsPerRow):
@@ -74,22 +85,24 @@ def samples(data, model, session, embeddings, sample=False):
         model.embeddings: embeddings, model.training: False})
     n, e = np.argmax(n, axis=-1), np.argmax(e, axis=-1)
 
-    mols = [data.matrices2mol(n_, e_, strict=True) for n_, e_ in zip(n, e)]
+    with disable_rdkit_log():
+        mols = [data.matrices2mol(n_, e_, strict=True) for n_, e_ in zip(n, e)]
 
     return mols
 
 
 def all_scores(mols, data, norm=False, reconstruction=False):
-    m0 = {k: list(filter(lambda e: e is not None, v)) for k, v in {
-        'NP score': MolecularMetrics.natural_product_scores(mols, norm=norm),
-        'QED score': MolecularMetrics.quantitative_estimation_druglikeness_scores(mols),
-        'logP score': MolecularMetrics.water_octanol_partition_coefficient_scores(mols, norm=norm),
-        'SA score': MolecularMetrics.synthetic_accessibility_score_scores(mols, norm=norm),
-        'diversity score': MolecularMetrics.diversity_scores(mols, data),
-        'drugcandidate score': MolecularMetrics.drugcandidate_scores(mols, data)}.items()}
+    with disable_rdkit_log():
+        m0 = {k: list(filter(lambda e: e is not None, v)) for k, v in {
+            'NP score': MolecularMetrics.natural_product_scores(mols, norm=norm),
+            'QED score': MolecularMetrics.quantitative_estimation_druglikeness_scores(mols),
+            'logP score': MolecularMetrics.water_octanol_partition_coefficient_scores(mols, norm=norm),
+            'SA score': MolecularMetrics.synthetic_accessibility_score_scores(mols, norm=norm),
+            'diversity score': MolecularMetrics.diversity_scores(mols, data),
+            'drugcandidate score': MolecularMetrics.drugcandidate_scores(mols, data)}.items()}
 
-    m1 = {'valid score': MolecularMetrics.valid_total_score(mols) * 100,
-          'unique score': MolecularMetrics.unique_total_score(mols) * 100,
-          'novel score': MolecularMetrics.novel_total_score(mols, data) * 100}
+        m1 = {'valid score': MolecularMetrics.valid_total_score(mols) * 100,
+              'unique score': MolecularMetrics.unique_total_score(mols) * 100,
+              'novel score': MolecularMetrics.novel_total_score(mols, data) * 100}
 
     return m0, m1
