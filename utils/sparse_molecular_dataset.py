@@ -2,13 +2,27 @@ import pickle
 import numpy as np
 
 from rdkit import Chem
-
-if __name__ == '__main__':
-    from progress_bar import ProgressBar
-else:
-    from utils.progress_bar import ProgressBar
-
+from tqdm import tqdm
 from datetime import datetime
+
+
+
+def read_sdf_file(filename):
+    return filter(lambda x: x is not None, Chem.SDMolSupplier(filename))
+
+
+def read_smi_file(filename):
+    with open(filename) as fin:
+        for line in fin:
+            smi, _ = line.split('\t', 1)
+            yield Chem.MolFromSmiles(smi)
+
+
+def read_molecules(filename):
+    if filename.endswith('.sdf'):
+        return read_sdf_file(filename)
+    elif filename.endswith('.smi') or filename.endswith('.smiles'):
+        return read_smi_file(filename)
 
 
 class SparseMolecularDataset():
@@ -27,34 +41,19 @@ class SparseMolecularDataset():
         self.validation_count = len(self.validation_idx)
         self.test_count = len(self.test_idx)
 
-        self.__len = self.train_count + self.validation_count + self.test_count
-
     def save(self, filename):
         with open(filename, 'wb') as f:
             pickle.dump(self.__dict__, f)
 
-    def generate(self, filename, add_h=False, filters=lambda x: True, size=None, validation=0.1, test=0.1):
-        self.log('Extracting {}..'.format(filename))
-
-        if filename.endswith('.sdf'):
-            self.data = list(filter(lambda x: x is not None, Chem.SDMolSupplier(filename)))
-        elif filename.endswith('.smi') or filename.endswith('.smiles'):
-            self.data = []
-            with open(filename) as fin:
-                for line in fin:
-                    smi, _ = line.split('\t', 1)
-                    self.data.append(Chem.MolFromSmiles(smi))
-
+    def generate(self, mol_reader, add_h=False, filters=lambda x: True, size=None, validation=0.1, test=0.1):
         if add_h:
-            self.data = [Chem.AddHs(m) for m in self.data]
+            self.data = [Chem.AddHs(m) for m in tqdm(mol_reader, desc='Loading molecules')]
         else:
-            self.data = [Chem.RemoveHs(m) for m in self.data]
+            self.data = [Chem.RemoveHs(m) for m in tqdm(mol_reader, desc='Loading molecules')]
         self.data = list(filter(filters, self.data))
         self.data = self.data[:size]
 
-        self.log('Extracted {} out of {} molecules {}adding Hydrogen!'.format(len(self.data),
-                                                                              len(Chem.SDMolSupplier(filename)),
-                                                                              '' if add_h else 'not '))
+        self.log('Extracted {} molecules {}adding Hydrogen!'.format(len(self.data), '' if add_h else 'not '))
 
         self._generate_encoders_decoders()
         self._generate_AX()
@@ -65,26 +64,26 @@ class SparseMolecularDataset():
         # it contains the all the molecules stored as SMILES strings
         self.smiles = np.array(self.smiles)
 
-        # a (N, L) matrix where N is the length of the dataset and each L-dim vector contains the 
-        # indices corresponding to a SMILE sequences with padding wrt the max length of the longest 
+        # a (N, L) matrix where N is the length of the dataset and each L-dim vector contains the
+        # indices corresponding to a SMILE sequences with padding wrt the max length of the longest
         # SMILES sequence in the dataset (see self._genS)
         self.data_S = np.stack(self.data_S)
 
-        # a (N, 9, 9) tensor where N is the length of the dataset and each 9x9 matrix contains the 
+        # a (N, 9, 9) tensor where N is the length of the dataset and each 9x9 matrix contains the
         # indices of the positions of the ones in the one-hot representation of the adjacency tensor
         # (see self._genA)
         self.data_A = np.stack(self.data_A)
 
-        # a (N, 9) matrix where N is the length of the dataset and each 9-dim vector contains the 
+        # a (N, 9) matrix where N is the length of the dataset and each 9-dim vector contains the
         # indices of the positions of the ones in the one-hot representation of the annotation matrix
         # (see self._genX)
         self.data_X = np.stack(self.data_X)
 
-        # a (N, 9) matrix where N is the length of the dataset and each  9-dim vector contains the 
+        # a (N, 9) matrix where N is the length of the dataset and each  9-dim vector contains the
         # diagonal of the correspondent adjacency matrix
         self.data_D = np.stack(self.data_D)
 
-        # a (N, F) matrix where N is the length of the dataset and each F vector contains features 
+        # a (N, F) matrix where N is the length of the dataset and each F vector contains features
         # of the correspondent molecule (see self._genF)
         self.data_F = np.stack(self.data_F)
 
@@ -92,9 +91,9 @@ class SparseMolecularDataset():
         # eigenvalues of the correspondent Laplacian matrix
         self.data_Le = np.stack(self.data_Le)
 
-        # a (N, 9, 9) matrix where N is the length of the dataset and each  9x9 matrix contains the 
+        # a (N, 9, 9) matrix where N is the length of the dataset and each  9x9 matrix contains the
         # eigenvectors of the correspondent Laplacian matrix
-        self.data_Lv = np.stack(self.data_Lv) 
+        self.data_Lv = np.stack(self.data_Lv)
 
         self.vertexes = self.data_F.shape[-2]
         self.features = self.data_F.shape[-1]
@@ -131,7 +130,6 @@ class SparseMolecularDataset():
 
     def _generate_AX(self):
         self.log('Creating features and adjacency matrices..')
-        pr = ProgressBar(60, len(self.data))
 
         data = []
         smiles = []
@@ -146,7 +144,7 @@ class SparseMolecularDataset():
         max_length = max(mol.GetNumAtoms() for mol in self.data)
         max_length_s = max(len(Chem.MolToSmiles(mol)) for mol in self.data)
 
-        for i, mol in enumerate(self.data):
+        for mol in tqdm(self.data):
             A = self._genA(mol, connected=True, max_length=max_length)
             D = np.count_nonzero(A, -1)
             if A is not None:
@@ -164,11 +162,9 @@ class SparseMolecularDataset():
                 data_Le.append(Le)
                 data_Lv.append(Lv)
 
-            pr.update(i + 1)
-
         self.log(date=False)
-        self.log('Created {} features and adjacency matrices  out of {} molecules!'.format(len(data),
-                                                                                           len(self.data)))
+        self.log('Created {} features and adjacency matrices out of {} molecules!'.format(len(data),
+                                                                                          len(self.data)))
 
         self.data = data
         self.smiles = smiles
@@ -179,7 +175,6 @@ class SparseMolecularDataset():
         self.data_F = data_F
         self.data_Le = data_Le
         self.data_Lv = data_Lv
-        self.__len = len(self.data)
 
     def _genA(self, mol, connected=True, max_length=None):
 
@@ -259,7 +254,6 @@ class SparseMolecularDataset():
         return mol
 
     def _generate_train_validation_test(self, validation, test):
-
         self.log('Creating train, validation and test sets..')
 
         validation = int(validation * len(self))
@@ -325,20 +319,48 @@ class SparseMolecularDataset():
         print(str(datetime.now().strftime('%Y-%m-%d %H:%M:%S')) + ' ' + str(msg) if date else str(msg))
 
     def __len__(self):
-        return self.__len
+        return len(self.data)
 
 
 if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('input', help='Path to file with molecules in SDF or SMILES format.')
-    parser.add_argument('output', help='Path to output file.')
+    parser.add_argument('-i', '--input', help='Path to file with molecules in SDF or SMILES format.')
+    parser.add_argument('--train', help='Path to file with molecules part of training data.')
+    parser.add_argument('--validation', help='Path to file with molecules part of validation data.')
+    parser.add_argument('--test', help='Path to file with molecules part of test data.')
+    parser.add_argument('-o', '--output', required=True, help='Path to output file.')
 
     args = parser.parse_args()
 
+    if args.input is not None:
+        mol_reader = read_molecules(args.input)
+    else:
+        sizes = {}
+        def split_mol_reader():
+            for kind in ('train', 'validation', 'test'):
+                i = -1
+                for i, m in enumerate(read_molecules(getattr(args, kind))):
+                    yield m
+                sizes[kind] = i + 1
+
+        mol_reader = split_mol_reader()
+
     data = SparseMolecularDataset()
-    data.generate(args.input, filters=lambda x: x.GetNumAtoms() <= 9)
+    data.generate(mol_reader, filters=lambda x: x.GetNumAtoms() <= 9)
+
+    if args.input is None:
+        # overwrite train, validation, test split
+        data.all_idx = np.arange(sum(sizes.values()), dtype=int)
+        assert data.all_idx.shape[0] == len(data)
+
+        start = 0
+        for kind in ('train', 'validation', 'test'):
+            setattr(data, kind + '_count', sizes[kind])
+            setattr(data, kind + '_idx', data.all_idx[start:(start + sizes[kind])])
+            start += sizes[kind]
+
     data.save(args.output)
 
     # data = SparseMolecularDataset()
