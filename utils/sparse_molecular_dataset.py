@@ -38,10 +38,17 @@ class SparseMolecularDataset():
 
         if filename.endswith('.sdf'):
             self.data = list(filter(lambda x: x is not None, Chem.SDMolSupplier(filename)))
-        elif filename.endswith('.smi'):
-            self.data = [Chem.MolFromSmiles(line) for line in open(filename, 'r').readlines()]
+        elif filename.endswith('.smi') or filename.endswith('.smiles'):
+            self.data = []
+            with open(filename) as fin:
+                for line in fin:
+                    smi, _ = line.split('\t', 1)
+                    self.data.append(Chem.MolFromSmiles(smi))
 
-        self.data = list(map(Chem.AddHs, self.data)) if add_h else self.data
+        if add_h:
+            self.data = [Chem.AddHs(m) for m in self.data]
+        else:
+            self.data = [Chem.RemoveHs(m) for m in self.data]
         self.data = list(filter(filters, self.data))
         self.data = self.data[:size]
 
@@ -322,9 +329,17 @@ class SparseMolecularDataset():
 
 
 if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('input', help='Path to file with molecules in SDF or SMILES format.')
+    parser.add_argument('output', help='Path to output file.')
+
+    args = parser.parse_args()
+
     data = SparseMolecularDataset()
-    data.generate('data/gdb9.sdf', filters=lambda x: x.GetNumAtoms() <= 9)
-    data.save('data/gdb9_9nodes.sparsedataset')
+    data.generate(args.input, filters=lambda x: x.GetNumAtoms() <= 9)
+    data.save(args.output)
 
     # data = SparseMolecularDataset()
     # data.generate('data/qm9_5k.smi', validation=0.00021, test=0.00021)  # , filters=lambda x: x.GetNumAtoms() <= 9)
