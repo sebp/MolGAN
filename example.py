@@ -1,3 +1,4 @@
+from collections import namedtuple
 from pathlib import Path
 import numpy as np
 import logging
@@ -13,28 +14,44 @@ from models import encoder_rgcn, decoder_adj, decoder_dot, decoder_rnn
 
 from optimizers.gan import GraphGANOptimizer
 
-batch_dim = 128
-la = 1
-dropout = 0
-n_critic = 5
-metric = 'validity,sas'
-n_samples = 5000
-z_dim = 8
-epochs = 10
-save_every = 1
-checkpoint_dir = Path('GraphGAN/lam{}'.format(la))
+class TrainParams(namedtuple('TrainParams',
+    ('batch_dim', 'learning_rate', 'la', 'dropout', 'n_critic', 'metric',
+     'n_samples', 'z_dim', 'epochs', 'save_every', 'model_base_dir', 'train_data'))):
 
-if not checkpoint_dir.exists():
-    checkpoint_dir.mkdir(parents=True)
-checkpoint_dir = str(checkpoint_dir)
+    @property
+    def checkpoint_dir(self):
+        return self.model_base_dir / 'lam{}'.format(self.la)
+
+    @property
+    def log_file(self):
+        return self.checkpoint_dir / 'molgan.log'
+
+
+PARAMS = TrainParams(
+batch_dim = 128,
+learning_rate = 1e-3,
+la = 1,
+dropout = 0,
+n_critic = 5,
+metric = 'validity,sas',
+n_samples = 5000,
+z_dim = 32,
+epochs = 10,
+save_every = 1,
+model_base_dir = Path('GraphGAN'),
+train_data = 'data/qm9-mysplits-data.pkl'
+)
+
+if not PARAMS.checkpoint_dir.exists():
+    PARAMS.checkpoint_dir.mkdir(parents=True)
 
 data = SparseMolecularDataset()
-data.load('data/gdb9_9nodes.sparsedataset')
+data.load(PARAMS.train_data)
 
-steps = (len(data) // batch_dim)
+steps = (len(data) // PARAMS.batch_dim)
 
 logger = logging.getLogger('molgan')
-fh = logging.FileHandler(checkpoint_dir + '/molgan.log')
+fh = logging.FileHandler(PARAMS.log_file)
 fh.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
 fh.setLevel(logging.DEBUG)
 logger.addHandler(fh)
@@ -42,9 +59,9 @@ logger.setLevel(logging.DEBUG)
 
 
 def train_fetch_dict(i, steps, epoch, epochs, min_epochs, model, optimizer):
-    if i % n_critic == 0:
+    if i % PARAMS.n_critic == 0:
         train_step = [optimizer.train_step_G]
-        if la < 1:
+        if PARAMS.la < 1:
             train_step.append(optimizer.train_step_V)
             summary_op = optimizer.summary_op_RL
         else:
@@ -59,12 +76,12 @@ def train_fetch_dict(i, steps, epoch, epochs, min_epochs, model, optimizer):
 
 def train_feed_dict(i, steps, epoch, epochs, min_epochs, model, optimizer, batch_dim):
     global session
-    mols, _, _, a, x, _, _, _, _ = data.next_train_batch(batch_dim)
-    embeddings = model.sample_z(batch_dim)
+    mols, _, _, a, x, _, _, _, _ = data.next_train_batch(PARAMS.batch_dim)
+    embeddings = model.sample_z(PARAMS.batch_dim)
 
-    if la < 1:
+    if PARAMS.la < 1:
 
-        if i % n_critic == 0:
+        if i % PARAMS.n_critic == 0:
             rewardR = reward(mols)
 
             n, e = session.run([model.nodes_gumbel_argmax, model.edges_gumbel_argmax],
@@ -81,22 +98,22 @@ def train_feed_dict(i, steps, epoch, epochs, min_epochs, model, optimizer, batch
                          model.rewardR: rewardR,
                          model.rewardF: rewardF,
                          model.training: True,
-                         model.dropout_rate: dropout,
-                         optimizer.la: la if epoch > 0 else 1.0}
+                         model.dropout_rate: PARAMS.dropout,
+                         optimizer.la: PARAMS.la if epoch > 0 else 1.0}
 
         else:
             feed_dict = {model.edges_labels: a,
                          model.nodes_labels: x,
                          model.embeddings: embeddings,
                          model.training: True,
-                         model.dropout_rate: dropout,
-                         optimizer.la: la if epoch > 0 else 1.0}
+                         model.dropout_rate: PARAMS.dropout,
+                         optimizer.la: PARAMS.la if epoch > 0 else 1.0}
     else:
         feed_dict = {model.edges_labels: a,
                      model.nodes_labels: x,
                      model.embeddings: embeddings,
                      model.training: True,
-                     model.dropout_rate: dropout,
+                     model.dropout_rate: PARAMS.dropout,
                      optimizer.la: 1.0}
 
     return feed_dict
@@ -165,7 +182,7 @@ def test_feed_dict(model, optimizer, batch_dim):
 def reward(mols):
     rr = 1.
     with disable_rdkit_log():
-        for m in ('logp,sas,qed,unique' if metric == 'all' else metric).split(','):
+        for m in ('logp,sas,qed,unique' if PARAMS.metric == 'all' else PARAMS.metric).split(','):
             if m == 'np':
                 rr *= MolecularMetrics.natural_product_scores(mols, norm=True)
             elif m == 'logp':
@@ -192,7 +209,7 @@ def reward(mols):
 
 def _eval_update(i, epochs, min_epochs, model, optimizer, batch_dim, eval_batch):
     global session
-    mols = samples(data, model, session, model.sample_z(n_samples), sample=True)
+    mols = samples(data, model, session, model.sample_z(PARAMS.n_samples), sample=True)
     m0, m1 = all_scores(mols, data, norm=True)
     m0 = {k: np.array(v)[np.nonzero(v)].mean() for k, v in m0.items()}
     m0.update(m1)
@@ -201,7 +218,7 @@ def _eval_update(i, epochs, min_epochs, model, optimizer, batch_dim, eval_batch)
 
 def _test_update(model, optimizer, batch_dim, test_batch):
     global session
-    mols = samples(data, model, session, model.sample_z(n_samples), sample=True)
+    mols = samples(data, model, session, model.sample_z(PARAMS.n_samples), sample=True)
     m0, m1 = all_scores(mols, data, norm=True)
     m0 = {k: np.array(v)[np.nonzero(v)].mean() for k, v in m0.items()}
     m0.update(m1)
@@ -212,9 +229,9 @@ def _test_update(model, optimizer, batch_dim, test_batch):
 model = GraphGANModel(data.vertexes,
                       data.bond_num_types,
                       data.atom_num_types,
-                      z_dim,
+                      PARAMS.z_dim,
                       decoder_units=(128, 256, 512),
-                      discriminator_units=((128, 64), 128, (128, 64)),
+                      discriminator_units=((128, 64), 128, (128, 64)),  # [0] = graph-conv, [1] = graph aggregation, [2] = fully-connected
                       decoder=decoder_adj,
                       discriminator=encoder_rgcn,
                       soft_gumbel_softmax=True,
@@ -222,7 +239,7 @@ model = GraphGANModel(data.vertexes,
                       batch_discriminator=False)
 
 # optimizer
-optimizer = GraphGANOptimizer(model, learning_rate=1e-3, feature_matching=False)
+optimizer = GraphGANOptimizer(model, learning_rate=PARAMS.learning_rate, feature_matching=False)
 
 # session
 tf.train.create_global_step()
@@ -231,16 +248,16 @@ init_op = tf.global_variables_initializer()
 with tf.Session() as session:
     # trainer
     trainer = Trainer(model, optimizer,
-                      save_every=save_every,
-                      directory=checkpoint_dir)
+                      save_every=PARAMS.save_every,
+                      directory=str(PARAMS.checkpoint_dir))
 
     logger.info('Parameters: %r', np.sum([np.prod(e.shape.as_list()) for e in tf.trainable_variables()]))
 
     session.run(init_op)
     session.graph.finalize()
     trainer.train(session=session,
-                  batch_dim=batch_dim,
-                  epochs=epochs,
+                  batch_dim=PARAMS.batch_dim,
+                  epochs=PARAMS.epochs,
                   steps=steps,
                   train_fetch_dict=train_fetch_dict,
                   train_feed_dict=train_feed_dict,
