@@ -1,9 +1,9 @@
-from collections import namedtuple
 from pathlib import Path
 import numpy as np
 import logging
 import tensorflow as tf
 
+from utils.params import TrainParams
 from utils.sparse_molecular_dataset import SparseMolecularDataset
 from utils.trainer import Trainer
 from utils.utils import MolecularMetrics, samples, all_scores
@@ -13,18 +13,6 @@ from models.gan import GraphGANModel
 from models import encoder_rgcn, decoder_adj, decoder_dot, decoder_rnn
 
 from optimizers.gan import GraphGANOptimizer
-
-class TrainParams(namedtuple('TrainParams',
-    ('batch_dim', 'learning_rate', 'la', 'dropout', 'n_critic', 'metric',
-     'n_samples', 'z_dim', 'epochs', 'save_every', 'model_base_dir', 'train_data'))):
-
-    @property
-    def checkpoint_dir(self):
-        return self.model_base_dir / 'lam{}'.format(self.la)
-
-    @property
-    def log_file(self):
-        return self.checkpoint_dir / 'molgan.log'
 
 
 PARAMS = TrainParams(

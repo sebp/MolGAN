@@ -50,6 +50,8 @@ class Trainer:
     def load(self):
         directory = self._directory
         ckpt_filename = tf.train.latest_checkpoint(directory)
+        if ckpt_filename is None:
+            raise ValueError('no checkpoint in {}'.format(directory))
         self._saver.restore(self.session, ckpt_filename)
         self.print = pickle.load(open('{}/{}.pkl'.format(directory, 'trainer'), 'rb'))
         self.log('Model loaded from {}!'.format(ckpt_filename))

@@ -240,7 +240,8 @@ class SparseMolecularDataset():
             except:
                 mol = None
 
-        return mol
+        if mol is not None:
+            return Chem.Mol(mol)
 
     def seq2mol(self, seq, strict=False):
         mol = Chem.MolFromSmiles(''.join([self.smiles_decoder_m[e] for e in seq if e != 0]))
