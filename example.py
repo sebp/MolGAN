@@ -36,8 +36,8 @@ n_critic = 5,
 metric = 'validity,sas',
 n_samples = 5000,
 z_dim = 32,
-epochs = 10,
-save_every = 1,
+epochs = 300,
+save_every = 5,
 model_base_dir = Path('GraphGAN'),
 train_data = 'data/qm9-mysplits-data.pkl'
 )
@@ -231,7 +231,7 @@ model = GraphGANModel(data.vertexes,
                       data.atom_num_types,
                       PARAMS.z_dim,
                       decoder_units=(128, 256, 512),
-                      discriminator_units=((128, 64), 128, (128, 64)),  # [0] = graph-conv, [1] = graph aggregation, [2] = fully-connected
+                      discriminator_units=((64, 32), 128, (128,)),  # [0] = graph-conv, [1] = graph aggregation, [2] = fully-connected
                       decoder=decoder_adj,
                       discriminator=encoder_rgcn,
                       soft_gumbel_softmax=True,
