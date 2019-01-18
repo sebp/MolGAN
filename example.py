@@ -91,6 +91,8 @@ def train_feed_dict(i, steps, epoch, epochs, min_epochs, model, optimizer, batch
                 mols = [data.matrices2mol(n_, e_, strict=True) for n_, e_ in zip(n, e)]
 
             rewardF = reward(mols)
+            logger.debug("step %d: average reward on real=%.4f, on generated=%.4f",
+                i, np.mean(rewardR), np.mean(rewardF))
 
             feed_dict = {model.edges_labels: a,
                          model.nodes_labels: x,
