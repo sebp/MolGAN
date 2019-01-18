@@ -79,7 +79,7 @@ def reconstructions(data, model, session, batch_dim=10, sample=False):
     return mols
 
 
-def samples(data, model, session, embeddings, sample=False):
+def samples(data, model, session, embeddings, sample=False, return_mat=False):
     n, e = session.run([model.nodes_gumbel_argmax, model.edges_gumbel_argmax] if sample else [
         model.nodes_argmax, model.edges_argmax], feed_dict={
         model.embeddings: embeddings, model.training: False})
@@ -88,6 +88,8 @@ def samples(data, model, session, embeddings, sample=False):
     with disable_rdkit_log():
         mols = [data.matrices2mol(n_, e_, strict=True) for n_, e_ in zip(n, e)]
 
+    if return_mat:
+        return mols, n, e
     return mols
 
 
