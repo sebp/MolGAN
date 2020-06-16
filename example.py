@@ -26,7 +26,7 @@ n_samples = 5000,
 z_dim = 32,
 epochs = 300,
 save_every = 5,
-model_base_dir = Path('GraphGAN'),
+model_base_dir = Path('GraphGAN/norl'),
 train_data = 'data/qm9-mysplits-data.pkl'
 )
 
