@@ -2,7 +2,6 @@ import argparse
 import logging
 from pathlib import Path
 import pickle
-from guacamol.distribution_matching_generator import DistributionMatchingGenerator
 from rdkit import Chem
 import numpy as np
 import tensorflow as tf
@@ -15,8 +14,6 @@ from utils.utils import disable_rdkit_log
 
 from models.gan import GraphGANModel
 from models import encoder_rgcn, decoder_adj
-
-from gan.mol.metrics.distribution_learning import assess_distribution_learning
 
 
 def test_fetch_dict(model):
@@ -38,7 +35,7 @@ def is_valid_smiles(s):
     return is_valid
 
 
-class MolganSampleGenerator(DistributionMatchingGenerator):
+class MolganSampleGenerator:
 
     def __init__(self, params):
         self._data = SparseMolecularDataset()
@@ -127,9 +124,9 @@ class MolganSampleGenerator(DistributionMatchingGenerator):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train_data_file', required=True)
     parser.add_argument('-o', '--output_file', required=True)
     parser.add_argument('--model_dir', required=True)
+    parser.add_argument('--number_samples', type=int, default=10000)
 
     args = parser.parse_args()
 
@@ -157,11 +154,11 @@ def main():
 
     generator = MolganSampleGenerator(PARAMS)
 
-    with disable_rdkit_log():
-        assess_distribution_learning(generator,
-                                 training_file_path=args.train_data_file,
-                                 json_output_file=args.output_file,
-                                 number_samples=10000)
+    with disable_rdkit_log(), open(args.output_file, "w") as fout:
+        for smi in generator.iter_generate(args.number_samples):
+            fout.write(smi)
+            fout.write("\n")
+
 
 if __name__ == '__main__':
     main()
